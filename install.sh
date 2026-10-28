@@ -4,18 +4,18 @@
 # published with the release.
 #
 # Environment:
-#   SREG_VERSION       release tag to install (`v0.1.0` or `0.1.0`); empty: action/VERSION
-#   SREG_ACTION_PATH   directory of the action (holds VERSION)
+#   SREG_VERSION       release tag to install (`v0.1.0` or `0.1.0`), from the action's
+#                      `sreg-version` input (whose default names the default release)
 #   SREG_RELEASES_URL  base URL of the releases (default: the GitHub releases of
 #                      kduma-OSS/serverless-registry-cli)
 set -euo pipefail
 
 releases_url="${SREG_RELEASES_URL:-https://github.com/kduma-OSS/serverless-registry-cli/releases/download}"
-action_path="${SREG_ACTION_PATH:-$(cd "$(dirname "$0")" && pwd)}"
 
-version="${SREG_VERSION:-}"
+version="$(printf '%s' "${SREG_VERSION:-}" | tr -d '[:space:]')"
 if [ -z "$version" ]; then
-  version="$(tr -d '[:space:]' < "$action_path/VERSION")"
+  echo "::error::the input 'sreg-version' is empty; pass a release such as v0.1.0 or omit it for the default" >&2
+  exit 1
 fi
 version="v${version#v}"
 
