@@ -102,11 +102,11 @@ and `skip-existing` is `false`, `3` when the registry requires a newer `sreg` (r
 
 ### Authentication
 
-The action needs a `publish` credential of the registry project. There are three ways to
+The action needs a credential with the `publish` role of the registry project. There are three ways to
 pass it; the first one that applies wins.
 
 **Token.** With `token`, the action exports it as `REGISTRY_TOKEN`. Store the token of
-the `publish` credential (`<project>:<secret>`) as a repository or environment secret:
+a token whose scope includes `publish` (`<project>:<secret>`) as a repository or environment secret:
 
 ```yaml
 - uses: kduma-OSS/serverless-registry-action/publish@v1
@@ -132,8 +132,11 @@ credentials. If both are given, `token` must equal the URL's credentials.
 **OIDC (no secret).** Without `token` and without credentials in `registry`, the action
 authenticates with the job's GitHub Actions OIDC token (`sreg … publish --oidc`). No
 secret is stored anywhere, but the job must be allowed to request the token
-(`id-token: write`), and the registry needs a `publish` credential with a `gh` secret
-that trusts the repository (and, ideally, only the release workflow or tags). See
+(`id-token: write`), and the registry needs a credential with the `publish` role and a `gh`
+secret scoped to `publish` that trusts the repository (and, ideally, only the release
+workflow or tags). One credential may also hold the `read` role, with a separate `gh` secret
+scoped to `read`: the registry picks the entry by the role the command needs, so the same
+repository can install and publish without `oidc-project`. See
 [A publish credential for GitHub Actions](https://github.com/kduma-OSS/serverless-registry-worker/blob/main/docs/deployment.md#a-publish-credential-for-github-actions-oidc-no-secret)
 in the Worker's deployment guide.
 
@@ -150,7 +153,7 @@ jobs:
         with:
           ecosystem: composer
           registry: https://packages.example.com
-          # oidc-project: acme-sdk   # only when several credentials match the repository
+          # oidc-project: acme-sdk   # only when several credentials hold the publish role for the repository
 ```
 
 With OIDC, `registry` must be exactly the registry's `PUBLIC_URL` (the token's audience).
@@ -420,8 +423,7 @@ jobs:
       - run: composer install
 ```
 
-The token is passed like for `publish`: `token` (a credential with read access to the
-packages, e.g. `${{ secrets.REGISTRY_TOKEN }}`), credentials in `registry`, or, without
+The token is passed like for `publish`: `token` (a token whose scope includes `read`, e.g. `${{ secrets.REGISTRY_TOKEN }}`), credentials in `registry`, or, without
 either, the job's OIDC token (`id-token: write`, optional `oidc-project`, passed as
 `sreg auth --project`). GitHub OIDC tokens are valid for minutes only, so run `auth`
 right before the step that installs packages.

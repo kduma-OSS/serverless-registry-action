@@ -9,6 +9,13 @@ default is named in each release ("Default sreg release").
 
 ## [Unreleased]
 
+### Changed
+
+- Documentation: the registry can give one credential both the `read` and the `publish` role,
+  with a `gh` secret scoped to each. The README now says which role and scope each input needs
+  and that `oidc-project` is only needed when several credentials hold the needed role for the
+  repository. No change to inputs, outputs or scripts.
+
 ## [1.0.4] - 2026-10-28
 
 ### Added
