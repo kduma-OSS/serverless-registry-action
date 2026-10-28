@@ -16,6 +16,20 @@ default is named in each release ("Default sreg release").
   and that `oidc-project` is only needed when several credentials hold the needed role for the
   repository. No change to inputs, outputs or scripts.
 
+## [1.0.5] - 2026-10-28
+
+### Changed
+
+- Default sreg release: v0.1.5.
+
+### Fixed
+
+- The release workflow pushes the release commit and tags as the release GitHub App
+  (`SERVERLESS_REGISTRY_RELEASE_APP_ID` and `SERVERLESS_REGISTRY_RELEASE_APP_PRIVATE_KEY`) when
+  they are set. A ruleset that requires status checks on `main` rejects the push made with
+  `GITHUB_TOKEN` (`GH013`, "Required status check is expected"); the App can be put on the
+  ruleset's bypass list. Without them it still uses `GITHUB_TOKEN`.
+
 ## [1.0.4] - 2026-10-28
 
 ### Added
@@ -111,7 +125,8 @@ default is named in each release ("Default sreg release").
   workflow (`.github/workflows/sync-cli-release.yml`) does the same with no token when the
   dispatch is not configured or fails.
 
-[Unreleased]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.1...v1.0.2
