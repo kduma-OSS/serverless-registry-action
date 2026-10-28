@@ -311,6 +311,39 @@ The flag that selects the package depends on the ecosystem, always together with
 | nuget | `project` | `project: src/Acme.Sdk/Acme.Sdk.csproj` |
 | maven | `coords` (with `from-dir`) | `coords: com.acme:sdk` |
 
+### One version for the whole monorepo
+
+When every package shares one version, tag the repository once (`v1.2.0`) and leave
+`tag-prefix` out: `sreg` takes the version from the `v<semver>` tag on `HEAD` by default.
+Select the package with the input from the table above and publish them all from the same
+tag with a matrix:
+
+```yaml
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        path: [packages/sdk, packages/client]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: kduma-OSS/serverless-registry-publish-action@v1
+        with:
+          ecosystem: composer
+          registry: https://packages.example.com
+          token: ${{ secrets.REGISTRY_PUBLISH_TOKEN }}
+          path: ${{ matrix.path }}
+```
+
+Exactly one `v<semver>` tag may point at the commit; two (`v1.2.0` and `v1.2.1`) fail the
+publish with `HEAD carries more than one release tag`. Tags with a package prefix such as
+`sdk/v1.0.0` do not count. The version in each package's manifest has to match the tag
+(composer checks it; npm, cargo and nuget rewrite it).
+
 ## Pinning `sreg`
 
 Each release of the action installs one `sreg` release by default: the `default:` of the
