@@ -52,6 +52,21 @@ inputs:
     description: "nuget: project file to pack (`--project`)."
     required: false
     default: ""
+  archive:
+    description: >-
+      composer, npm, cargo, nuget: publish this archive (.zip, .tgz, .crate, .nupkg), built
+      earlier, byte for byte instead of packing the project (`--archive`). Needs an sreg
+      release with `--archive`; incompatible with `tag-prefix`, `path`, `workspace`,
+      `package`, `project` and `args`.
+    required: false
+    default: ""
+  source-registry-index:
+    description: >-
+      cargo, with `archive`: index URL of the retired registry the crate was built for;
+      its dependencies are published as dependencies of this registry
+      (`--source-registry-index`).
+    required: false
+    default: ""
   from-dir:
     description: "maven: local repository the build deployed to (`--from-dir`)."
     required: false
@@ -140,6 +155,8 @@ runs:
         INPUT_WORKSPACE: ${{ inputs.workspace }}
         INPUT_PACKAGE: ${{ inputs.package }}
         INPUT_PROJECT: ${{ inputs.project }}
+        INPUT_ARCHIVE: ${{ inputs.archive }}
+        INPUT_SOURCE_REGISTRY_INDEX: ${{ inputs.source-registry-index }}
         INPUT_FROM_DIR: ${{ inputs.from-dir }}
         INPUT_COORDS: ${{ inputs.coords }}
         INPUT_SCOPE: ${{ inputs.scope }}

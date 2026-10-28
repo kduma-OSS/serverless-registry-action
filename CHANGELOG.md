@@ -9,6 +9,13 @@ default is named in each release ("Default sreg release").
 
 ## [Unreleased]
 
+### Added
+
+- `publish`: the inputs `archive` (`sreg <composer|npm|cargo|nuget> publish --archive`,
+  publishes an archive built earlier byte for byte) and `source-registry-index`
+  (`sreg cargo publish --source-registry-index`, with `archive`). They need an `sreg`
+  release that has `--archive`; set `sreg-version` accordingly.
+
 ## [1.0.3] - 2026-10-28
 
 ### Changed

@@ -30,11 +30,24 @@ only_for path "${INPUT_PATH:-}" composer swift
 only_for workspace "${INPUT_WORKSPACE:-}" npm
 only_for package "${INPUT_PACKAGE:-}" cargo generic
 only_for project "${INPUT_PROJECT:-}" nuget
+only_for archive "${INPUT_ARCHIVE:-}" composer npm cargo nuget
+only_for source-registry-index "${INPUT_SOURCE_REGISTRY_INDEX:-}" cargo
 only_for from-dir "${INPUT_FROM_DIR:-}" maven
 only_for coords "${INPUT_COORDS:-}" maven
 only_for scope "${INPUT_SCOPE:-}" swift
 only_for generic-files "${INPUT_GENERIC_FILES:-}" generic
 only_for generic-labels "${INPUT_GENERIC_LABELS:-}" generic
+
+if [ -n "${INPUT_SOURCE_REGISTRY_INDEX:-}" ] && [ -z "${INPUT_ARCHIVE:-}" ]; then
+  fail "the input 'source-registry-index' needs 'archive'"
+fi
+if [ -n "${INPUT_ARCHIVE:-}" ]; then
+  # An archive is described by its own manifest; the selectors below do not apply.
+  for input in TAG_PREFIX PATH WORKSPACE PACKAGE PROJECT ARGS; do
+    value="INPUT_$input"
+    [ -z "${!value:-}" ] || fail "the input '$(printf '%s' "$input" | tr 'A-Z_' 'a-z-')' cannot be combined with 'archive'"
+  done
+fi
 
 cmd=(sreg "$ecosystem" publish --json)
 
@@ -70,6 +83,8 @@ if [ "$ecosystem" = generic ]; then
 else
   [ -z "${INPUT_VERSION:-}" ] || cmd+=(--version "${INPUT_VERSION#v}")
   [ -z "${INPUT_TAG_PREFIX:-}" ] || cmd+=(--tag-prefix "$INPUT_TAG_PREFIX")
+  [ -z "${INPUT_ARCHIVE:-}" ] || cmd+=(--archive "$INPUT_ARCHIVE")
+  [ -z "${INPUT_SOURCE_REGISTRY_INDEX:-}" ] || cmd+=(--source-registry-index "$INPUT_SOURCE_REGISTRY_INDEX")
   [ -z "${INPUT_PATH:-}" ] || cmd+=(--path "$INPUT_PATH")
   [ -z "${INPUT_WORKSPACE:-}" ] || cmd+=(--workspace "$INPUT_WORKSPACE")
   [ -z "${INPUT_PACKAGE:-}" ] || cmd+=(--package "$INPUT_PACKAGE")

@@ -58,6 +58,8 @@ installed by the action: set them up in earlier steps, as for a local build. To 
 | `workspace` | empty | npm: workspace to publish (`--workspace`). |
 | `package` | empty | cargo: crate to publish (`--package`); generic: the package name. |
 | `project` | empty | nuget: project file (`--project`). |
+| `archive` | empty | composer, npm, cargo, nuget: publish this archive (`.zip`, `.tgz`, `.crate`, `.nupkg`), built earlier, byte for byte (`--archive`). See [Publishing a prebuilt archive](#publishing-a-prebuilt-archive). |
+| `source-registry-index` | empty | cargo, with `archive`: index URL of the retired registry the crate was built for (`--source-registry-index`). |
 | `from-dir` | empty | maven: local repository the build deployed to (`--from-dir`). |
 | `coords` | empty | maven: `<groupId>:<artifactId>` to publish (`--coords`). |
 | `scope` | empty | swift: registry scope (`--scope`, required by `sreg swift publish`). |
@@ -326,6 +328,47 @@ The flag that selects the package depends on the ecosystem, always together with
 | cargo | `package` | `package: acme-sdk` |
 | nuget | `project` | `project: src/Acme.Sdk/Acme.Sdk.csproj` |
 | maven | `coords` (with `from-dir`) | `coords: com.acme:sdk` |
+
+### Publishing a prebuilt archive
+
+Build, test and protect the archive in one job, download that artifact in the publishing
+job and pass it as `archive`: exactly those bytes are uploaded, the package, version and
+dependencies are read from the manifest inside the archive, and neither a checkout nor
+`npm`, `cargo`, `dotnet` or `git` is needed.
+
+```yaml
+publish:
+  runs-on: ubuntu-latest
+  permissions:
+    id-token: write
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: dist
+        path: dist
+    - uses: kduma-OSS/serverless-registry-action/publish@v1
+      with:
+        ecosystem: npm
+        registry: https://packages.example.com
+        archive: dist/package.tgz
+```
+
+`version` is then only a consistency check (for a Composer archive whose `composer.json`
+has no `version`, it is the version to publish); `tag-prefix`, `path`, `workspace`,
+`package`, `project` and `args` cannot be combined with `archive`. Migrating a crate built
+for a retired registry:
+
+```yaml
+- uses: kduma-OSS/serverless-registry-action/publish@v1
+  with:
+    ecosystem: cargo
+    registry: https://packages.example.com
+    archive: dist/licensing-kit-example-1.2.3.crate
+    source-registry-index: sparse+https://old.example.com/cargo/index/
+```
+
+`archive` needs an `sreg` release that has `--archive`: set `sreg-version` to the release
+that introduced it until this action's default catches up.
 
 ## Setup
 
