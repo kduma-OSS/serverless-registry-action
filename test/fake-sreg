@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Stand-in for the sreg binary in the tests. `--version` prints a version; any
+# `<ecosystem> publish` call records its arguments (one per line) in $FAKE_SREG_LOG and
+# the registry variables in $FAKE_SREG_LOG.env, then prints the JSON that
+# `sreg <ecosystem> publish --json` prints.
+set -euo pipefail
+
+if [ "${1:-}" = --version ]; then
+  echo "sreg 9.9.9 (fake)"
+  exit 0
+fi
+
+if [ -n "${FAKE_SREG_LOG:-}" ]; then
+  printf '%s\n' "$@" > "$FAKE_SREG_LOG"
+  {
+    echo "REGISTRY_URL=${REGISTRY_URL-<unset>}"
+    echo "REGISTRY_TOKEN=${REGISTRY_TOKEN-<unset>}"
+  } > "$FAKE_SREG_LOG.env"
+fi
+
+if [ "${2:-}" != publish ]; then
+  echo "fake sreg: unexpected arguments: $*" >&2
+  exit 64
+fi
+
+dry_run=false
+for arg in "$@"; do
+  [ "$arg" = --dry-run ] && dry_run=true
+done
+if [ "$dry_run" = true ]; then
+  url=null
+else
+  url='"https://packages.example.com/composer/acme/sdk/1.2.0"'
+fi
+printf '{"name":"acme/sdk","version":"1.2.0","url":%s,"skipped":false,"dryRun":%s}\n' \
+  "$url" "$dry_run"
