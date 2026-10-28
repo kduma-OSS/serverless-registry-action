@@ -194,6 +194,42 @@ else
   fail "publish.sh failed without naming the input"
 fi
 
+# Archive mode: --archive (and --source-registry-index) are passed to sreg, the project
+# selectors are refused before sreg runs.
+if publish INPUT_ECOSYSTEM=cargo REGISTRY_URL=https://packages.example.com \
+  REGISTRY_TOKEN=ci-acme-sdk:secret INPUT_ARCHIVE=dist/acme-1.0.0.crate INPUT_VERSION=v1.0.0 \
+  INPUT_SOURCE_REGISTRY_INDEX=sparse+https://old.example.com/index/ INPUT_SKIP_EXISTING=false; then
+  expected="cargo publish --json --version 1.0.0 --archive dist/acme-1.0.0.crate --source-registry-index sparse+https://old.example.com/index/"
+  actual="$(paste -sd' ' "$work/sreg.log")"
+  if [ "$actual" = "$expected" ]; then
+    pass "publish.sh passes --archive and --source-registry-index"
+  else
+    fail "publish.sh passed: $actual (expected: $expected)"
+  fi
+else
+  cat "$work/publish.log" >&2
+  fail "publish.sh failed for an archive"
+fi
+
+for rejected in "INPUT_ECOSYSTEM=npm INPUT_ARCHIVE=a.tgz INPUT_WORKSPACE=w|cannot be combined" \
+  "INPUT_ECOSYSTEM=npm INPUT_ARCHIVE=a.tgz INPUT_TAG_PREFIX=v|cannot be combined" \
+  "INPUT_ECOSYSTEM=nuget INPUT_ARCHIVE=a.nupkg INPUT_ARGS=-c|cannot be combined" \
+  "INPUT_ECOSYSTEM=cargo INPUT_SOURCE_REGISTRY_INDEX=sparse+https://x/|needs 'archive'" \
+  "INPUT_ECOSYSTEM=maven INPUT_ARCHIVE=a.jar|does not apply to maven" \
+  "INPUT_ECOSYSTEM=npm INPUT_SOURCE_REGISTRY_INDEX=sparse+https://x/ INPUT_ARCHIVE=a.tgz|does not apply to npm"; do
+  vars="${rejected%%|*}"
+  message="${rejected#*|}"
+  # shellcheck disable=SC2086
+  if publish REGISTRY_URL=https://packages.example.com REGISTRY_TOKEN=t $vars; then
+    fail "publish.sh accepted: $vars"
+  elif grep -q "$message" "$work/publish.log" && [ ! -e "$work/sreg.log" ]; then
+    pass "publish.sh rejects: $vars"
+  else
+    cat "$work/publish.log" >&2
+    fail "publish.sh failed with the wrong message for: $vars"
+  fi
+done
+
 # --- auth.sh ---------------------------------------------------------------------------
 # Runs a script of the action ($1) with only the given variables (and PATH, HOME) set.
 run_script() {
