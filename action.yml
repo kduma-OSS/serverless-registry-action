@@ -1,7 +1,7 @@
 name: Serverless Registry publish
 description: >-
-  Install sreg from its GitHub release (checksum verified) and publish a Composer, npm,
-  cargo, NuGet, Swift, Maven or generic package to a Serverless Registry.
+  Deprecated alias of kduma-OSS/serverless-registry-action/publish, kept for v1: install
+  sreg (checksum verified) and publish a package to a Serverless Registry.
 author: kduma-OSS
 branding:
   icon: package
@@ -112,6 +112,13 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Deprecation notice
+      shell: bash
+      run: >-
+        echo "::warning::kduma-OSS/serverless-registry-action@v1 (formerly
+        serverless-registry-publish-action) is deprecated and will be removed in v2:
+        use kduma-OSS/serverless-registry-action/publish@v1, which takes the same inputs."
+
     - name: Install sreg
       shell: bash
       env:

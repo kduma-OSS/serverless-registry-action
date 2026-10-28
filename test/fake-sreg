@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# Stand-in for the sreg binary in the tests. `--version` prints a version; any
-# `<ecosystem> publish` call records its arguments (one per line) in $FAKE_SREG_LOG and
-# the registry variables in $FAKE_SREG_LOG.env, then prints the JSON that
-# `sreg <ecosystem> publish --json` prints.
+# Stand-in for the sreg binary in the tests. `--version` prints a version. Every other
+# call records its arguments (one per line) in $FAKE_SREG_LOG, appends them as one line to
+# $FAKE_SREG_LOG.all and writes the registry variables to $FAKE_SREG_LOG.env. Then:
+#
+# - `<ecosystem> publish` prints the JSON that `sreg <ecosystem> publish --json` prints;
+# - `auth <ecosystem> --write <file>` appends `<ecosystem> token=<token>` to the file;
+# - `generic get <name> <version> --json` prints a feed entry (`latest` and constraints
+#   resolve to 1.4.0); without `--json` it writes one file (`--sole`) or two into `--out`
+#   and prints their paths.
 set -euo pipefail
 
 if [ "${1:-}" = --version ]; then
@@ -12,10 +17,70 @@ fi
 
 if [ -n "${FAKE_SREG_LOG:-}" ]; then
   printf '%s\n' "$@" > "$FAKE_SREG_LOG"
+  printf '%s\n' "$*" >> "$FAKE_SREG_LOG.all"
   {
     echo "REGISTRY_URL=${REGISTRY_URL-<unset>}"
     echo "REGISTRY_TOKEN=${REGISTRY_TOKEN-<unset>}"
   } > "$FAKE_SREG_LOG.env"
+fi
+
+# Prints the value of the option $1 among the remaining arguments.
+option() {
+  local name="$1"
+  shift
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "$name" ]; then
+      printf '%s' "${2:-}"
+      return 0
+    fi
+    shift
+  done
+  return 1
+}
+
+has_flag() {
+  local name="$1" arg
+  shift
+  for arg in "$@"; do
+    [ "$arg" = "$name" ] && return 0
+  done
+  return 1
+}
+
+if [ "${1:-}" = auth ]; then
+  file="$(option --write "$@")" || {
+    echo "fake sreg: auth without --write" >&2
+    exit 64
+  }
+  mkdir -p "$(dirname "$file")"
+  echo "$2 token=${REGISTRY_TOKEN-<oidc>}" >> "$file"
+  echo "Wrote the token for $2 to $file."
+  exit 0
+fi
+
+if [ "${1:-}" = generic ] && [ "${2:-}" = get ]; then
+  name="$3"
+  version="$4"
+  case "$version" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *) version=1.4.0 ;;
+  esac
+  if has_flag --json "$@"; then
+    printf '{"name":"%s","version":"%s","yanked":false,"files":[]}\n' "$name" "$version"
+    exit 0
+  fi
+  out="$(option --out "$@" || echo .)"
+  mkdir -p "$out"
+  if has_flag --sole "$@"; then
+    : > "$out/tool-linux.tar.gz"
+    echo "$out/tool-linux.tar.gz"
+  else
+    : > "$out/tool-linux.tar.gz"
+    : > "$out/tool-macos.tar.gz"
+    echo "$out/tool-linux.tar.gz"
+    echo "$out/tool-macos.tar.gz"
+  fi
+  exit 0
 fi
 
 if [ "${2:-}" != publish ]; then

@@ -9,6 +9,35 @@ default is named in each release ("Default sreg release").
 
 ## [Unreleased]
 
+### Added
+
+- `kduma-OSS/serverless-registry-action/setup@v1`: installs `sreg` only (outputs
+  `version` and `path`).
+- `kduma-OSS/serverless-registry-action/auth@v1`: writes the registry's credentials to the
+  credentials file of Composer, npm, cargo, NuGet, Swift or Maven with
+  `sreg auth <ecosystem> --write` (by default the package manager's user-level file, or
+  `write`), with a token, credentials in the registry URL or OIDC; optionally the npm
+  scope line (`npm-scope`), the cargo registry declaration (`cargo-config`, on by
+  default) and the Swift scope (`swift-scope`). Output `file`.
+- `kduma-OSS/serverless-registry-action/get@v1`: downloads the files of a generic package
+  version with `sreg generic get` (exact version, constraint or `latest`, labels, `sole`,
+  `out`, `prerelease`); outputs `version`, `files` and `path`.
+- `kduma-OSS/serverless-registry-action/publish@v1`: the publish action, with the same
+  inputs and outputs as before.
+
+### Changed
+
+- The repository is renamed from `kduma-OSS/serverless-registry-publish-action` to
+  `kduma-OSS/serverless-registry-action`.
+- `install.sh` reuses a release an earlier step of the job installed, without
+  downloading it again, and writes the `version` and `path` outputs.
+
+### Deprecated
+
+- The root action (`kduma-OSS/serverless-registry-action@v1`, formerly
+  `kduma-OSS/serverless-registry-publish-action@v1`) prints a warning; use `/publish`. It
+  will be removed in v2.
+
 ## [1.0.1] - 2026-10-28
 
 ### Changed
@@ -54,6 +83,6 @@ default is named in each release ("Default sreg release").
   workflow (`.github/workflows/sync-cli-release.yml`) does the same with no token when the
   dispatch is not configured or fails.
 
-[Unreleased]: https://github.com/kduma-OSS/serverless-registry-publish-action/compare/v1.0.1...HEAD
-[1.0.1]: https://github.com/kduma-OSS/serverless-registry-publish-action/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/kduma-OSS/serverless-registry-publish-action/releases/tag/v1.0.0
+[Unreleased]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/kduma-OSS/serverless-registry-action/releases/tag/v1.0.0

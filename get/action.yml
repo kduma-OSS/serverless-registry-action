@@ -1,0 +1,93 @@
+name: Serverless Registry get
+description: >-
+  Install sreg and download the files of a generic package version from a Serverless
+  Registry, verified against their size and SHA-256.
+author: kduma-OSS
+branding:
+  icon: download-cloud
+  color: orange
+
+inputs:
+  registry:
+    description: >-
+      Base URL of the registry, e.g. https://packages.example.com (REGISTRY_URL). It may
+      carry the token as https://<login>:<password>@packages.example.com; pass it from a
+      secret then.
+    required: true
+  token:
+    description: >-
+      Read token (REGISTRY_TOKEN). When empty and `registry` carries no credentials, the
+      action authenticates with a GitHub Actions OIDC token (`--oidc`); the job then needs
+      `permissions: id-token: write`.
+    required: false
+    default: ""
+  oidc-project:
+    description: "With OIDC: the project the token is issued for (`--oidc-project`). By default the registry finds it from the repository."
+    required: false
+    default: ""
+  name:
+    description: "Package name, `[<group>/]<name>`."
+    required: true
+  version:
+    description: "An exact version, a constraint the registry resolves (`^1.2`, `>=1 <2`, `1.x`) or `latest`."
+    required: false
+    default: "latest"
+  labels:
+    description: "Only files with these labels, `key=value`, one per line or comma-separated (all must match)."
+    required: false
+    default: ""
+  sole:
+    description: "Fail unless the labels select exactly one file (`--sole`); `out` may then name the file."
+    required: false
+    default: "false"
+  out:
+    description: "Directory to write the files to (`--out`); with `sole` also the path of the file."
+    required: false
+    default: "."
+  prerelease:
+    description: "With `latest` or a constraint: consider prerelease versions too (`--prerelease`)."
+    required: false
+    default: "false"
+  sreg-version:
+    description: >-
+      Release of sreg to install, e.g. `v0.1.0` (a leading `v` is optional). The default is
+      the sreg release this version of the action was tested with.
+    required: false
+    default: "v0.1.1"
+
+outputs:
+  version:
+    description: "The version that was downloaded (the resolved one for `latest` or a constraint)."
+    value: ${{ steps.get.outputs.version }}
+  files:
+    description: "Paths of the downloaded files, one per line."
+    value: ${{ steps.get.outputs.files }}
+  path:
+    description: "Path of the downloaded file when exactly one was downloaded (always with `sole`), empty otherwise."
+    value: ${{ steps.get.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install sreg
+      shell: bash
+      env:
+        SREG_VERSION: ${{ inputs.sreg-version }}
+        SREG_ACTION_PATH: ${{ github.action_path }}
+      run: bash "$SREG_ACTION_PATH/../install.sh"
+
+    - name: Download
+      id: get
+      shell: bash
+      env:
+        REGISTRY_URL: ${{ inputs.registry }}
+        REGISTRY_TOKEN: ${{ inputs.token }}
+        INPUT_OIDC_PROJECT: ${{ inputs.oidc-project }}
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_LABELS: ${{ inputs.labels }}
+        INPUT_SOLE: ${{ inputs.sole }}
+        INPUT_OUT: ${{ inputs.out }}
+        INPUT_PRERELEASE: ${{ inputs.prerelease }}
+        SREG_ACTION_PATH: ${{ github.action_path }}
+      run: bash "$SREG_ACTION_PATH/../get.sh"

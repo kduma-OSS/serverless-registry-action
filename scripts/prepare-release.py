@@ -8,7 +8,8 @@
 
 It computes the next version from the latest `vX.Y.Z` tag (`--bump`, default `patch`; the
 first release is 1.0.0) or takes `--version`, optionally sets the `default:` of the
-`sreg-version` input in action.yml (and adds "Default sreg release: v…" to the changelog),
+`sreg-version` input in every action.yml (the root one and those of the subdirectory
+actions, which must agree; adds "Default sreg release: v…" to the changelog),
 rolls CHANGELOG.md (the [Unreleased] entries move under `## [<version>] - <date>`) and writes
 the release notes. It prints the version on stdout; `--dry-run` changes no file.
 
@@ -34,7 +35,7 @@ SEMVER = re.compile(
 )
 FIRST_VERSION = "1.0.0"
 GROUP_ORDER = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"]
-DEFAULT_REPO_URL = "https://github.com/kduma-OSS/serverless-registry-publish-action"
+DEFAULT_REPO_URL = "https://github.com/kduma-OSS/serverless-registry-action"
 
 
 class ReleaseError(Exception):
@@ -126,6 +127,21 @@ def newer_sreg_release(tags, current: str) -> str | None:
 
 
 # --- action.yml ----------------------------------------------------------------------------
+
+
+def action_files(root: Path):
+    """The root action.yml and the action.yml of every subdirectory action."""
+    return [root / "action.yml"] + sorted(root.glob("*/action.yml"))
+
+
+def common_sreg_version_default(texts) -> str:
+    """The `sreg-version` default shared by all action.yml files, given as {path: text}."""
+    defaults = {path: sreg_version_default(text) for path, text in texts.items()}
+    if len(set(defaults.values())) != 1:
+        listed = ", ".join(f"{path}: {value}" for path, value in sorted(defaults.items()))
+        raise ReleaseError(f"the sreg-version defaults of the action.yml files differ ({listed})")
+    return next(iter(defaults.values()))
+
 
 
 def sreg_version_default(action_yml: str) -> str:
@@ -332,7 +348,8 @@ def main(argv=None) -> int:
 
     if args.newer_sreg_release:
         try:
-            current = sreg_version_default((root / "action.yml").read_text(encoding="utf-8"))
+            texts = {str(p.relative_to(root)): p.read_text(encoding="utf-8") for p in action_files(root)}
+            current = common_sreg_version_default(texts)
         except ReleaseError as error:
             print(f"error: {error}", file=sys.stderr)
             return 1
@@ -349,16 +366,16 @@ def main(argv=None) -> int:
         latest = latest_version(tags)
         version = next_version(latest, args.bump, args.version)
 
-        action_path = root / "action.yml"
+        action_paths = action_files(root)
         changelog_path = root / "CHANGELOG.md"
-        action_yml = action_path.read_text(encoding="utf-8")
+        action_ymls = {str(p.relative_to(root)): p.read_text(encoding="utf-8") for p in action_paths}
         changelog = changelog_path.read_text(encoding="utf-8")
+        current = common_sreg_version_default(action_ymls)
 
         if args.sreg_version:
             sreg = normalize_sreg_version(args.sreg_version)
-            current = sreg_version_default(action_yml)
             if sreg != current:
-                action_yml = set_sreg_version_default(action_yml, sreg)
+                action_ymls = {path: set_sreg_version_default(text, sreg) for path, text in action_ymls.items()}
                 changelog = add_changelog_entry(changelog, "Changed", f"Default sreg release: {sreg}.")
                 print(f"sreg-version default: {current} -> {sreg}", file=sys.stderr)
             else:
@@ -369,7 +386,8 @@ def main(argv=None) -> int:
         if args.dry_run:
             print(notes, file=sys.stderr)
         else:
-            action_path.write_text(action_yml, encoding="utf-8")
+            for path, text in action_ymls.items():
+                (root / path).write_text(text, encoding="utf-8")
             changelog_path.write_text(changelog, encoding="utf-8")
             if args.notes_file:
                 Path(args.notes_file).write_text(notes + "\n", encoding="utf-8")

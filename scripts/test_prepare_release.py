@@ -84,6 +84,12 @@ class ActionYml(unittest.TestCase):
         self.assertIn('  other:\n    default: ""', updated)
         self.assertEqual(updated.count("v0.2.0"), 1)
 
+    def test_defaults_must_agree(self):
+        other = pr.set_sreg_version_default(ACTION_YML, "v0.2.0")
+        self.assertEqual(pr.common_sreg_version_default({"a": ACTION_YML, "b/a": ACTION_YML}), "v0.1.0")
+        with self.assertRaises(pr.ReleaseError):
+            pr.common_sreg_version_default({"a": ACTION_YML, "b/a": other})
+
 
 class Changelog(unittest.TestCase):
     def test_roll_into_a_new_section(self):
@@ -113,6 +119,8 @@ class CommandLine(unittest.TestCase):
     def test_apply(self):
         with tempfile.TemporaryDirectory() as root:
             Path(root, "action.yml").write_text(ACTION_YML)
+            Path(root, "setup").mkdir()
+            Path(root, "setup", "action.yml").write_text(ACTION_YML)
             Path(root, "CHANGELOG.md").write_text(CHANGELOG)
             notes = Path(root, "notes.md")
             result = subprocess.run(
@@ -123,6 +131,7 @@ class CommandLine(unittest.TestCase):
             )
             self.assertEqual(result.stdout, "1.0.1\n")
             self.assertIn('default: "v0.2.0"', Path(root, "action.yml").read_text())
+            self.assertIn('default: "v0.2.0"', Path(root, "setup", "action.yml").read_text())
             self.assertIn("## [1.0.1] - 2026-02-02", Path(root, "CHANGELOG.md").read_text())
             self.assertIn("- Default sreg release: v0.2.0.", notes.read_text())
 

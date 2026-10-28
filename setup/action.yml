@@ -1,0 +1,35 @@
+name: Serverless Registry setup sreg
+description: >-
+  Install sreg, the CLI of Serverless Registry, from its GitHub release (checksum verified)
+  and add it to PATH.
+author: kduma-OSS
+branding:
+  icon: download
+  color: orange
+
+inputs:
+  sreg-version:
+    description: >-
+      Release of sreg to install, e.g. `v0.1.0` (a leading `v` is optional). The default is
+      the sreg release this version of the action was tested with.
+    required: false
+    default: "v0.1.1"
+
+outputs:
+  version:
+    description: "Installed sreg release, e.g. `v0.1.1`."
+    value: ${{ steps.install.outputs.version }}
+  path:
+    description: "Path of the sreg binary."
+    value: ${{ steps.install.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install sreg
+      id: install
+      shell: bash
+      env:
+        SREG_VERSION: ${{ inputs.sreg-version }}
+        SREG_ACTION_PATH: ${{ github.action_path }}
+      run: bash "$SREG_ACTION_PATH/../install.sh"
