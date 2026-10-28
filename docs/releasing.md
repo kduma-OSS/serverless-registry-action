@@ -60,10 +60,20 @@ so every release goes through one code path. The run:
    change of the inputs or outputs as `2.0.0` (`bump: major`); that creates `v2` and
    leaves `v1` where it is. Update the README examples to `@v2` in the same change.
 
-The workflow needs only its own `GITHUB_TOKEN` (`permissions: contents: write`). Branch
-protection or rulesets on `main` must let GitHub Actions push directly; the release commit
-is not a pull request. Pushes made with `GITHUB_TOKEN` start no workflows, so CI does not
-run on the release commit; the run checks the action itself before it pushes.
+The workflow declares `permissions: contents: write` itself. It pushes the release commit and
+the tags straight to `main`, so branch protection or rulesets on `main` must let that push
+through. `GITHUB_TOKEN` cannot be put on a ruleset's bypass list, so a ruleset that requires
+status checks (for example `Changelog entry`, which only exists on pull requests) rejects it
+with `GH013: Required status check … is expected`. For that case the workflow pushes as the
+release GitHub App (the one that starts this workflow from the CLI release, below) when the
+repository has the variable or secret `SERVERLESS_REGISTRY_RELEASE_APP_ID` and the secret
+`SERVERLESS_REGISTRY_RELEASE_APP_PRIVATE_KEY`. The App needs the **Contents: Read and write**
+permission (in addition to **Actions: Read and write**), must be installed on this repository
+and must be on the ruleset's **Bypass list** (Add bypass → Apps, **Exempt**); the rule for the
+`v1` tag, if you have one, needs the same bypass. Without the two values the workflow uses
+`GITHUB_TOKEN`, which is enough when `main` has no such rule. Pushes made as the App start the
+other workflows (a CI run on the release commit); the run checks the action itself before it
+pushes.
 
 ## Following CLI releases
 

@@ -9,6 +9,14 @@ default is named in each release ("Default sreg release").
 
 ## [Unreleased]
 
+### Fixed
+
+- The release workflow pushes the release commit and tags as the release GitHub App
+  (`SERVERLESS_REGISTRY_RELEASE_APP_ID` and `SERVERLESS_REGISTRY_RELEASE_APP_PRIVATE_KEY`) when
+  they are set. A ruleset that requires status checks on `main` rejects the push made with
+  `GITHUB_TOKEN` (`GH013`, "Required status check is expected"); the App can be put on the
+  ruleset's bypass list. Without them it still uses `GITHUB_TOKEN`.
+
 ## [1.0.4] - 2026-10-28
 
 ### Added
