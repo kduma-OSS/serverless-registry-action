@@ -9,12 +9,15 @@ default is named in each release ("Default sreg release").
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-10-28
+
 ### Changed
 
 - Documentation: the registry can give one credential both the `read` and the `publish` role,
   with a `gh` secret scoped to each. The README now says which role and scope each input needs
   and that `oidc-project` is only needed when several credentials hold the needed role for the
   repository. No change to inputs, outputs or scripts.
+- Default sreg release: v0.2.0.
 
 ## [1.0.5] - 2026-10-28
 
@@ -125,7 +128,8 @@ default is named in each release ("Default sreg release").
   workflow (`.github/workflows/sync-cli-release.yml`) does the same with no token when the
   dispatch is not configured or fails.
 
-[Unreleased]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.2...v1.0.3
