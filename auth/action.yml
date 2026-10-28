@@ -1,0 +1,92 @@
+name: Serverless Registry auth
+description: >-
+  Install sreg and write the credentials of a Serverless Registry to the credentials file
+  of Composer, npm, cargo, NuGet, the Swift Package Manager or Maven, for installing
+  packages in CI.
+author: kduma-OSS
+branding:
+  icon: lock
+  color: orange
+
+inputs:
+  ecosystem:
+    description: "Package manager to configure: composer, npm, cargo, nuget, swift or maven."
+    required: true
+  registry:
+    description: >-
+      Base URL of the registry, e.g. https://packages.example.com (REGISTRY_URL). It may
+      carry the token as https://<login>:<password>@packages.example.com; pass it from a
+      secret then.
+    required: true
+  token:
+    description: >-
+      Read token (REGISTRY_TOKEN). When empty and `registry` carries no credentials, the
+      action authenticates with a GitHub Actions OIDC token (`--oidc`); the job then needs
+      `permissions: id-token: write`.
+    required: false
+    default: ""
+  oidc-project:
+    description: "With OIDC: the project the token is issued for (`--project`). By default the registry finds it from the repository."
+    required: false
+    default: ""
+  write:
+    description: >-
+      Credentials file to write (`--write`). By default the package manager's user-level
+      file: Composer's `auth.json` in its home, npm's user `.npmrc`,
+      `$CARGO_HOME/credentials.toml`, the user `NuGet.Config`, `~/.netrc` (Swift) or
+      `~/.m2/settings.xml`.
+    required: false
+    default: ""
+  registry-name:
+    description: "cargo, nuget, maven: name of the registry, the NuGet source or the Maven server id (`--registry-name`, default `sreg`)."
+    required: false
+    default: ""
+  npm-scope:
+    description: "npm: also write `@<scope>:registry=<registry>/npm/` to the file, e.g. `@acme`."
+    required: false
+    default: ""
+  cargo-config:
+    description: "cargo: also declare `[registries.<name>]` with the registry's sparse index in `config.toml` next to the credentials file."
+    required: false
+    default: "true"
+  swift-scope:
+    description: "swift: also run `swift package-registry set --global <registry>/swift --scope <scope>`."
+    required: false
+    default: ""
+  sreg-version:
+    description: >-
+      Release of sreg to install, e.g. `v0.1.0` (a leading `v` is optional). The default is
+      the sreg release this version of the action was tested with.
+    required: false
+    default: "v0.1.1"
+
+outputs:
+  file:
+    description: "Path of the credentials file that was written."
+    value: ${{ steps.auth.outputs.file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install sreg
+      shell: bash
+      env:
+        SREG_VERSION: ${{ inputs.sreg-version }}
+        SREG_ACTION_PATH: ${{ github.action_path }}
+      run: bash "$SREG_ACTION_PATH/../install.sh"
+
+    - name: Write credentials
+      id: auth
+      shell: bash
+      env:
+        REGISTRY_URL: ${{ inputs.registry }}
+        REGISTRY_TOKEN: ${{ inputs.token }}
+        INPUT_ECOSYSTEM: ${{ inputs.ecosystem }}
+        INPUT_OIDC_PROJECT: ${{ inputs.oidc-project }}
+        INPUT_WRITE: ${{ inputs.write }}
+        INPUT_REGISTRY_NAME: ${{ inputs.registry-name }}
+        INPUT_NPM_SCOPE: ${{ inputs.npm-scope }}
+        INPUT_CARGO_CONFIG: ${{ inputs.cargo-config }}
+        INPUT_SWIFT_SCOPE: ${{ inputs.swift-scope }}
+        SREG_ACTION_PATH: ${{ github.action_path }}
+      run: bash "$SREG_ACTION_PATH/../auth.sh"

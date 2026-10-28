@@ -1,12 +1,14 @@
 # Releasing the action
 
-The action is versioned independently of the `sreg` CLI. A release is an annotated tag
+The actions (`publish`, `setup`, `auth`, `get` and the deprecated root alias) are released
+together and versioned independently of the `sreg` CLI. A release is an annotated tag
 `vX.Y.Z` on `main` with a GitHub release, plus the moving major tag `v1` that users
-reference as `kduma-OSS/serverless-registry-publish-action@v1`. Releases are made only by
+reference as `kduma-OSS/serverless-registry-action/<action>@v1`. Releases are made only by
 the **Release** workflow (`.github/workflows/release.yml`); do not tag by hand.
 
-The `sreg` release the action installs by default is the `default:` of the `sreg-version`
-input in `action.yml`. Changing it is a release of the action like any other change (a
+The `sreg` release the actions install by default is the `default:` of the `sreg-version`
+input, identical in every `action.yml` (the root one and `publish/`, `setup/`, `auth/`,
+`get/`; CI and `scripts/prepare-release.py` refuse files that disagree). Changing it is a release of the action like any other change (a
 patch release when nothing else changed), so `@v1` users get the new `sreg` and pinned
 users (`@v1.2.3`) keep theirs.
 
@@ -36,12 +38,12 @@ so every release goes through one code path. The run:
    `scripts/prepare-release.py`: the next `bump` of the latest `vX.Y.Z` tag (the first
    release is `1.0.0`, whatever the bump), or `version`. The tag must not exist yet.
 3. With `sreg-version`, rewrites the `default:` of the `sreg-version` input in
-   `action.yml` and adds "Default sreg release: v…" to `### Changed` in `[Unreleased]`.
+   every `action.yml` and adds "Default sreg release: v…" to `### Changed` in `[Unreleased]`.
 4. Rolls `CHANGELOG.md`: the `[Unreleased]` entries move under
    `## [<version>] - <today>` (UTC); a section written ahead (like `[1.0.0]`) gets the
    entries merged into it and the date set. An empty `[Unreleased]` without such a
    section is an error (nothing to release). The links at the bottom are updated.
-5. Parses `action.yml` and runs `test/smoke.sh`.
+5. Parses every `action.yml` and runs `test/smoke.sh`.
 6. Commits `chore(release): v<version>` as `github-actions[bot]`, creates the annotated
    tag `v<version>` with the changelog section as its message and pushes both to `main`
    atomically.
@@ -75,7 +77,7 @@ own, in two ways; both end in the Release workflow with `bump: patch` and
    `kduma-OSS/serverless-registry-cli`) that, for a stable release, runs
 
    ```
-   gh workflow run release.yml -R kduma-OSS/serverless-registry-publish-action \
+   gh workflow run release.yml -R kduma-OSS/serverless-registry-action \
      -f sreg-version=v<version> -f bump=patch -f only-if-newer-sreg=true
    ```
 
@@ -88,7 +90,7 @@ own, in two ways; both end in the Release workflow with `bump: patch` and
       write** and **Metadata: Read-only** (the default); nothing else. "Only on this
       account".
    2. Install it on `kduma-OSS` with **Only select repositories** →
-      `kduma-OSS/serverless-registry-publish-action`.
+      `kduma-OSS/serverless-registry-action`.
    3. Generate a private key (a `.pem` file) on the App's page.
    4. In `kduma-OSS/serverless-registry-cli` → **Settings** → **Secrets and variables** →
       **Actions**, add two repository **secrets**: `SERVERLESS_REGISTRY_RELEASE_APP_ID`
@@ -124,5 +126,5 @@ release that makes it the default, then release the Worker. See the CLI's
 ## Testing a release candidate
 
 Before releasing, a workflow elsewhere can use the action from a branch or commit
-(`uses: kduma-OSS/serverless-registry-publish-action@<sha>`) with `dry-run: true`, or with
+(`uses: kduma-OSS/serverless-registry-action/publish@<sha>`) with `dry-run: true`, or with
 `sreg-version` set to a CLI prerelease.

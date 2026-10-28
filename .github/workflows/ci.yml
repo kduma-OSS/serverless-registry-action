@@ -17,17 +17,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Parse action.yml
+      - name: Parse the action.yml files
         run: |
           python3 - <<'PY'
+          import glob
           import yaml
 
-          with open("action.yml", encoding="utf-8") as f:
-              action = yaml.safe_load(f)
-          assert action["runs"]["using"] == "composite", "not a composite action"
-          default = action["inputs"]["sreg-version"].get("default", "")
+          actions = {}
+          for path in ["action.yml"] + sorted(glob.glob("*/action.yml")):
+              with open(path, encoding="utf-8") as f:
+                  actions[path] = yaml.safe_load(f)
+              assert actions[path]["runs"]["using"] == "composite", f"{path}: not a composite action"
+          assert set(actions) == {
+              "action.yml", "publish/action.yml", "setup/action.yml", "auth/action.yml", "get/action.yml"
+          }, sorted(actions)
+          defaults = {path: a["inputs"]["sreg-version"].get("default", "") for path, a in actions.items()}
+          assert len(set(defaults.values())) == 1, f"the sreg-version defaults differ: {defaults}"
+          default = next(iter(defaults.values()))
           assert default.startswith("v"), f"sreg-version has no default release: {default!r}"
-          print(f"action.yml parsed; default sreg release {default}")
+          # The root action is an alias of publish/: same interface.
+          for key in ("inputs", "outputs"):
+              assert actions["action.yml"][key] == actions["publish/action.yml"][key], \
+                  f"the {key} of action.yml and publish/action.yml differ"
+          print(f"{len(actions)} action.yml files parsed; default sreg release {default}")
           PY
       - name: Shellcheck
         run: git ls-files -z '*.sh' test/fake-sreg | xargs -0 shellcheck
@@ -63,10 +75,26 @@ jobs:
           done
           cat "$RUNNER_TEMP/server.log"
           exit 1
-      - id: publish
-        uses: ./
+      - id: setup
+        uses: ./setup
         env:
           SREG_RELEASES_URL: http://127.0.0.1:8765
+        with:
+          sreg-version: v9.9.9
+      - name: Check the setup outputs
+        env:
+          VERSION: ${{ steps.setup.outputs.version }}
+          SREG_PATH: ${{ steps.setup.outputs.path }}
+        run: |
+          test "$VERSION" = v9.9.9
+          test "$(sreg --version)" = "sreg 9.9.9 (fake)"
+          test "$("$SREG_PATH" --version)" = "sreg 9.9.9 (fake)"
+
+      - id: publish
+        uses: ./publish
+        env:
+          # The release is installed already: the closed port proves it is not downloaded again.
+          SREG_RELEASES_URL: http://127.0.0.1:9
           FAKE_SREG_LOG: ${{ runner.temp }}/sreg.log
         with:
           ecosystem: composer
@@ -74,7 +102,7 @@ jobs:
           token: ci-acme-sdk:not-a-secret
           dry-run: true
           sreg-version: v9.9.9
-      - name: Check the outputs
+      - name: Check the publish outputs
         env:
           NAME: ${{ steps.publish.outputs.name }}
           VERSION: ${{ steps.publish.outputs.version }}
@@ -87,3 +115,63 @@ jobs:
           test "$VERSION" = 1.2.0
           test -z "$URL"
           test "$SKIPPED" = false
+
+      - id: alias
+        name: Run the deprecated root action
+        uses: ./
+        env:
+          SREG_RELEASES_URL: http://127.0.0.1:9
+        with:
+          ecosystem: composer
+          registry: https://packages.example.com
+          token: ci-acme-sdk:not-a-secret
+          dry-run: true
+          sreg-version: v9.9.9
+      - name: Check the alias outputs
+        env:
+          NAME: ${{ steps.alias.outputs.name }}
+        run: test "$NAME" = acme/sdk
+
+      - id: auth
+        uses: ./auth
+        env:
+          SREG_RELEASES_URL: http://127.0.0.1:9
+        with:
+          ecosystem: npm
+          registry: https://packages.example.com
+          token: ci-acme-sdk:not-a-secret
+          write: ${{ runner.temp }}/npm/.npmrc
+          npm-scope: acme
+          sreg-version: v9.9.9
+      - name: Check the auth outputs
+        env:
+          FILE: ${{ steps.auth.outputs.file }}
+        run: |
+          cat "$FILE"
+          test "$FILE" = "$RUNNER_TEMP/npm/.npmrc"
+          grep -qx 'npm token=ci-acme-sdk:not-a-secret' "$FILE"
+          grep -qx '@acme:registry=https://packages.example.com/npm/' "$FILE"
+
+      - id: get
+        uses: ./get
+        env:
+          SREG_RELEASES_URL: http://127.0.0.1:9
+        with:
+          registry: https://packages.example.com
+          token: ci-acme-sdk:not-a-secret
+          name: acme/tool
+          version: ^1
+          labels: os=linux
+          sole: true
+          out: ${{ runner.temp }}/dist
+          sreg-version: v9.9.9
+      - name: Check the get outputs
+        env:
+          VERSION: ${{ steps.get.outputs.version }}
+          FILES: ${{ steps.get.outputs.files }}
+          FILE_PATH: ${{ steps.get.outputs.path }}
+        run: |
+          test "$VERSION" = 1.4.0
+          test "$FILES" = "$RUNNER_TEMP/dist/tool-linux.tar.gz"
+          test "$FILE_PATH" = "$RUNNER_TEMP/dist/tool-linux.tar.gz"
+          test -f "$FILE_PATH"

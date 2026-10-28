@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Installs the sreg release binary for the current runner into $RUNNER_TEMP/sreg and
 # adds it to $GITHUB_PATH, after verifying the archive against the SHA-256 checksum
-# published with the release.
+# published with the release. When that directory already holds the requested release
+# (an earlier step of the job installed it), it is reused without a download. Writes the
+# `version` and `path` (of the binary) outputs to $GITHUB_OUTPUT.
 #
 # Environment:
 #   SREG_VERSION       release tag to install (`v0.1.0` or `0.1.0`), from the action's
@@ -42,6 +44,45 @@ esac
 temp="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 dest="$temp/sreg"
 download="$temp/sreg-download"
+
+find_binary() {
+  { find "$dest" -type f \( -name sreg -o -name sreg.exe \) 2> /dev/null || true; } | head -n 1
+}
+
+# Adds the binary's directory to $GITHUB_PATH, writes the outputs and prints its version.
+finish() {
+  local binary="$1" bin_dir path_entry binary_entry
+  bin_dir="$(dirname "$binary")"
+  if command -v cygpath > /dev/null 2>&1; then
+    path_entry="$(cygpath -w "$bin_dir")"
+    binary_entry="$(cygpath -w "$binary")"
+  else
+    path_entry="$bin_dir"
+    binary_entry="$binary"
+  fi
+  if [ -n "${GITHUB_PATH:-}" ]; then
+    echo "$path_entry" >> "$GITHUB_PATH"
+  fi
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    {
+      echo "version=$version"
+      echo "path=$binary_entry"
+    } >> "$GITHUB_OUTPUT"
+  fi
+  "$binary" --version
+}
+
+# `sreg --version` prints `sreg <version>`.
+existing="$(find_binary)"
+if [ -n "$existing" ] && [ -x "$existing" ]; then
+  installed="$("$existing" --version 2> /dev/null | awk '{ print $2; exit }' | tr -d '\r' || true)"
+  if [ "v${installed#v}" = "$version" ]; then
+    echo "sreg $version is already installed in $dest"
+    finish "$existing"
+    exit 0
+  fi
+fi
+
 rm -rf "$dest" "$download"
 mkdir -p "$dest" "$download"
 
@@ -72,20 +113,10 @@ case "$archive" in
 esac
 rm -rf "$download"
 
-binary="$(find "$dest" -type f \( -name sreg -o -name sreg.exe \) | head -n 1)"
+binary="$(find_binary)"
 if [ -z "$binary" ]; then
   echo "::error::the archive $archive does not contain the sreg binary" >&2
   exit 1
 fi
-bin_dir="$(dirname "$binary")"
 chmod +x "$binary" 2> /dev/null || true
-
-if command -v cygpath > /dev/null 2>&1; then
-  path_entry="$(cygpath -w "$bin_dir")"
-else
-  path_entry="$bin_dir"
-fi
-if [ -n "${GITHUB_PATH:-}" ]; then
-  echo "$path_entry" >> "$GITHUB_PATH"
-fi
-"$binary" --version
+finish "$binary"

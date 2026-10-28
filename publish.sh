@@ -3,31 +3,8 @@
 # and writes the `name`, `version`, `url` and `skipped` outputs to $GITHUB_OUTPUT.
 set -euo pipefail
 
-fail() {
-  echo "::error::$*" >&2
-  exit 1
-}
-
-# Splits a string into words with shell-like quoting (no expansion, no command
-# substitution) and appends them to the array named by $1.
-split_words() {
-  local __name="$1" __input="$2" __word
-  case "$__input" in
-    *[![:space:]]*) ;;
-    *) return 0 ;;
-  esac
-  while IFS= read -r -d '' __word; do
-    eval "$__name+=(\"\$__word\")"
-  done < <(printf '%s\n' "$__input" | xargs printf '%s\0')
-}
-
-is_true() {
-  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
-    true | yes | 1 | on) return 0 ;;
-    false | no | 0 | off | "") return 1 ;;
-    *) fail "expected true or false, got '$1'" ;;
-  esac
-}
+# shellcheck source=lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # Rejects an input that the selected ecosystem does not take.
 only_for() {
@@ -68,8 +45,7 @@ if [ "$ecosystem" = generic ]; then
   cmd+=("$INPUT_PACKAGE" "${INPUT_VERSION#v}")
   files=()
   while IFS= read -r pattern || [ -n "$pattern" ]; do
-    pattern="${pattern#"${pattern%%[![:space:]]*}"}"
-    pattern="${pattern%"${pattern##*[![:space:]]}"}"
+    pattern="$(trim "$pattern")"
     [ -z "$pattern" ] && continue
     matched=0
     # Unquoted on purpose: expand the glob pattern.
@@ -84,8 +60,7 @@ if [ "$ecosystem" = generic ]; then
   [ "${#files[@]}" -gt 0 ] || fail "generic: the input 'generic-files' is required"
   cmd+=("${files[@]}")
   while IFS= read -r label || [ -n "$label" ]; do
-    label="${label#"${label%%[![:space:]]*}"}"
-    label="${label%"${label##*[![:space:]]}"}"
+    label="$(trim "$label")"
     [ -z "$label" ] && continue
     case "$label" in
       *=*) cmd+=(--label "$label") ;;
@@ -104,25 +79,7 @@ else
   [ -z "${INPUT_SCOPE:-}" ] || cmd+=(--scope "$INPUT_SCOPE")
 fi
 
-# A registry URL with userinfo (https://<login>:<password>@host/) carries the token.
-url_has_credentials() {
-  [[ "${REGISTRY_URL:-}" =~ ^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*@ ]]
-}
-
-if [ -z "${REGISTRY_TOKEN:-}" ] && url_has_credentials; then
-  # The token comes from the registry URL.
-  unset REGISTRY_TOKEN
-  [ -z "${INPUT_OIDC_PROJECT:-}" ] || fail "'oidc-project' applies only to OIDC, not to credentials in 'registry'"
-elif [ -z "${REGISTRY_TOKEN:-}" ]; then
-  # No token: authenticate with the job's OIDC token instead.
-  unset REGISTRY_TOKEN
-  [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] ||
-    fail "no token given and no OIDC token available: grant the job 'permissions: id-token: write' or pass 'token'"
-  cmd+=(--oidc)
-  [ -z "${INPUT_OIDC_PROJECT:-}" ] || cmd+=(--oidc-project "$INPUT_OIDC_PROJECT")
-else
-  [ -z "${INPUT_OIDC_PROJECT:-}" ] || fail "'oidc-project' applies only without 'token'"
-fi
+auth_flags cmd --oidc-project
 
 if is_true "${INPUT_DRY_RUN:-false}"; then cmd+=(--dry-run); fi
 if is_true "${INPUT_SKIP_EXISTING:-true}"; then cmd+=(--skip-existing); fi
@@ -134,9 +91,7 @@ if [ "${#trailing[@]}" -gt 0 ]; then
   cmd+=(-- "${trailing[@]}")
 fi
 
-printf 'Running:'
-printf ' %q' "${cmd[@]}"
-printf '\n'
+print_command "${cmd[@]}"
 
 status=0
 result="$("${cmd[@]}")" || status=$?
@@ -156,11 +111,7 @@ version="$(field '.version // empty')"
 url="$(field '.url // empty')"
 skipped="$(field 'if .skipped == true then "true" else "false" end')"
 
-if [ -n "${GITHUB_OUTPUT:-}" ]; then
-  {
-    echo "name=$name"
-    echo "version=$version"
-    echo "url=$url"
-    echo "skipped=$skipped"
-  } >> "$GITHUB_OUTPUT"
-fi
+set_output name "$name"
+set_output version "$version"
+set_output url "$url"
+set_output skipped "$skipped"
