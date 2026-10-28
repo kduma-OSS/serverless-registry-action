@@ -11,10 +11,23 @@
 # - runs auth.sh for composer, npm (with a scope), cargo (with the registry declaration)
 #   and OIDC, and get.sh with and without `sole`, and checks the files and outputs.
 #
-# Needs bash, curl, python3, tar with xz, jq. Usage: test/smoke.sh
+# - runs install.sh as on a Windows runner (RUNNER_OS=Windows), which unpacks the zip.
+#
+# Needs bash, curl, python3, tar with xz, unzip, jq. Runs on Linux, macOS and Windows (Git
+# Bash). Usage: test/smoke.sh
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
+python="$(command -v python3 || command -v python)"
+# Under Git Bash install.sh writes Windows paths to GITHUB_PATH and the binary is sreg.exe.
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*) windows=true exe=sreg.exe ;;
+  *) windows=false exe=sreg ;;
+esac
+# A path as auth.sh hands it to sreg and writes it to the outputs: a Windows path under Git Bash.
+native() {
+  if $windows; then cygpath -w "$1"; else printf '%s\n' "$1"; fi
+}
 work="$(mktemp -d)"
 server_pid=""
 cleanup() {
@@ -38,7 +51,7 @@ for sum in "$work"/releases/v9.9.8/*.sha256; do
   echo "$(printf '0%.0s' $(seq 64)) *$(basename "${sum%.sha256}")" > "$sum"
 done
 
-python3 -u -m http.server 0 --bind 127.0.0.1 --directory "$work/releases" \
+"$python" -u -m http.server 0 --bind 127.0.0.1 --directory "$work/releases" \
   > "$work/server.log" 2>&1 &
 server_pid=$!
 port=""
@@ -66,8 +79,9 @@ install() {
 
 # --- install.sh ------------------------------------------------------------------------
 if install 9.9.9; then
-  bin_dir="$(head -n 1 "$work/github_path")"
-  if [ -x "$bin_dir/sreg" ] && [ "$("$bin_dir/sreg" --version)" = "sreg 9.9.9 (fake)" ] &&
+  bin_dir="$(head -n 1 "$work/github_path" | tr -d '\r')"
+  if $windows; then bin_dir="$(cygpath -u "$bin_dir")"; fi
+  if [ -x "$bin_dir/$exe" ] && [ "$("$bin_dir/$exe" --version)" = "sreg 9.9.9 (fake)" ] &&
     grep -q '^Checksum verified: ' "$work/install.log"; then
     pass "install.sh installs the release and adds it to GITHUB_PATH"
   else
@@ -87,11 +101,25 @@ if env RUNNER_TEMP="$work/runner" GITHUB_PATH="$work/github_path" \
   bash "$root/install.sh" > "$work/install.log" 2>&1 &&
   grep -q 'already installed' "$work/install.log" &&
   grep -qx 'version=v9.9.9' "$work/github_output" &&
-  grep -q '^path=.*/sreg$' "$work/github_output"; then
+  grep -Eq '^path=.*[/\\]sreg(\.exe)?$' "$work/github_output"; then
   pass "install.sh reuses an installed release and writes the outputs"
 else
   cat "$work/install.log" "$work/github_output" >&2
   fail "install.sh did not reuse the installed release"
+fi
+
+# The Windows build: a zip with sreg.exe; the runner variables select it on any host.
+rm -rf "$work/runner"
+mkdir -p "$work/runner"
+if env RUNNER_OS=Windows RUNNER_ARCH=X64 RUNNER_TEMP="$work/runner" \
+  SREG_RELEASES_URL="$releases_url" SREG_VERSION=9.9.9 \
+  bash "$root/install.sh" > "$work/install.log" 2>&1 &&
+  grep -q 'x86_64-pc-windows-msvc' "$work/install.log" &&
+  [ -n "$(find "$work/runner/sreg" -type f -name sreg.exe)" ]; then
+  pass "install.sh unpacks the Windows zip"
+else
+  cat "$work/install.log" >&2
+  fail "install.sh did not install the Windows build"
 fi
 
 if install v9.9.8; then
@@ -181,11 +209,11 @@ mkdir -p "$work/home"
 
 if run_script auth.sh INPUT_ECOSYSTEM=composer REGISTRY_URL=https://packages.example.com \
   REGISTRY_TOKEN=acme:secret COMPOSER_HOME="$work/composer"; then
-  if [ "$(cat "$work/sreg.log.all")" != "auth composer --write $work/composer/auth.json" ]; then
+  if [ "$(cat "$work/sreg.log.all")" != "auth composer --write $(native "$work/composer/auth.json")" ]; then
     fail "auth.sh ran: $(cat "$work/sreg.log.all")"
   elif ! grep -qx 'composer token=acme:secret' "$work/composer/auth.json"; then
     fail "auth.sh did not write auth.json in COMPOSER_HOME"
-  elif ! grep -qx "file=$work/composer/auth.json" "$work/github_output"; then
+  elif ! grep -qxF "file=$(native "$work/composer/auth.json")" "$work/github_output"; then
     fail "auth.sh wrote the outputs: $(cat "$work/github_output")"
   else
     pass "auth.sh writes composer's auth.json in COMPOSER_HOME"
@@ -219,7 +247,7 @@ for _ in 1 2; do
     fail "auth.sh failed for cargo"
   }
 done
-if [ "$(cat "$work/sreg.log.all")" = "auth cargo --write $work/cargo/credentials.toml --registry-name internal" ] &&
+if [ "$(cat "$work/sreg.log.all")" = "auth cargo --write $(native "$work/cargo/credentials.toml") --registry-name internal" ] &&
   [ "$(grep -c -x '\[registries.internal\]' "$work/cargo/config.toml")" = 1 ] &&
   grep -qx 'index = "sparse+https://packages.example.com/cargo/index/"' "$work/cargo/config.toml"; then
   pass "auth.sh writes cargo's credentials and declares the registry once"
@@ -230,7 +258,7 @@ fi
 
 if run_script auth.sh INPUT_ECOSYSTEM=maven REGISTRY_URL=https://packages.example.com \
   ACTIONS_ID_TOKEN_REQUEST_URL=https://token.example.com INPUT_OIDC_PROJECT=acme-sdk &&
-  [ "$(cat "$work/sreg.log.all")" = "auth maven --write $work/home/.m2/settings.xml --oidc --project acme-sdk" ]; then
+  [ "$(cat "$work/sreg.log.all")" = "auth maven --write $(native "$work/home/.m2/settings.xml") --oidc --project acme-sdk" ]; then
   pass "auth.sh uses OIDC with --project and writes ~/.m2/settings.xml"
 else
   cat "$work/script.log" "$work/sreg.log.all" >&2
