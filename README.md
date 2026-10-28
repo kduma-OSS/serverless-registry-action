@@ -344,9 +344,31 @@ see the [changelog](CHANGELOG.md)):
 - `@v1.2.3` (a release tag) or a commit SHA pins the action, and with it the default
   `sreg` release, for fully reproducible workflows.
 
-Releases are made with the **Release** workflow of this repository; the
-**Sync CLI release** workflow releases the action automatically when a newer stable `sreg`
-release appears. See [`docs/releasing.md`](docs/releasing.md) and, for the CLI side, the
+Releases are made only by the **Release** workflow of this repository
+(`.github/workflows/release.yml`); it also moves `v1` to every stable 1.x release.
+
+### Following CLI releases
+
+A stable `sreg` release becomes the action's default through a patch release of the
+action, started in one of two ways (both go through the Release workflow with
+`only-if-newer-sreg: true`, so the second one does nothing):
+
+- **Push from the CLI.** The CLI's release workflow ends with a job that dispatches this
+  repository's Release workflow with `sreg-version: v<version>`. It authenticates as a
+  GitHub App, e.g. "Serverless Registry Release": no webhook, repository permissions
+  **Actions: Read and write** and **Metadata: Read-only** only, installed on
+  `kduma-OSS/serverless-registry-publish-action` only. Its App ID and private key (PEM)
+  are the repository secrets `SERVERLESS_REGISTRY_RELEASE_APP_ID` and
+  `SERVERLESS_REGISTRY_RELEASE_APP_PRIVATE_KEY` of `kduma-OSS/serverless-registry-cli`.
+  The App can only start the workflow; this repository's own `GITHUB_TOKEN` makes the
+  commit, the tags and the release.
+- **Hourly sync.** The **Sync CLI release** workflow checks the CLI's newest stable
+  release every hour with the default `GITHUB_TOKEN` and releases the action when it is
+  newer than the default. It needs no token or secret and covers a missing or failed
+  dispatch, so `@v1` follows CLI releases within an hour either way.
+
+By hand, run the Release workflow with `sreg-version` (and `bump`). See
+[`docs/releasing.md`](docs/releasing.md) for the whole process and the App setup, and the
 CLI's [release process](https://github.com/kduma-OSS/serverless-registry-cli/blob/main/docs/releasing.md).
 
 ## Development
