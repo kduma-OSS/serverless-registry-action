@@ -91,14 +91,14 @@ own, in two ways; both end in the Release workflow with `bump: patch` and
       `kduma-OSS/serverless-registry-publish-action`.
    3. Generate a private key (a `.pem` file) on the App's page.
    4. In `kduma-OSS/serverless-registry-cli` → **Settings** → **Secrets and variables** →
-      **Actions**: add the App ID as the repository **variable** `RELEASE_APP_ID` and
-      the contents of the `.pem` file as the repository **secret**
-      `RELEASE_APP_PRIVATE_KEY`.
+      **Actions**, add two repository **secrets**: `SERVERLESS_REGISTRY_RELEASE_APP_ID`
+      with the App ID and `SERVERLESS_REGISTRY_RELEASE_APP_PRIVATE_KEY` with the contents
+      of the `.pem` file.
 
    The App can only start workflows in this repository; the commit, the tags and the
    GitHub release are made by this repository's own `GITHUB_TOKEN` in the Release run.
-   Without the variable or the secret (e.g. in a fork) the CLI's job prints a notice and
-   succeeds without doing anything.
+   Without the two secrets (e.g. in a fork) the CLI's job prints a notice and succeeds
+   without doing anything; a failed token or dispatch only prints a warning.
 
 2. **Hourly sync (fallback, no token).** `.github/workflows/sync-cli-release.yml` runs at
    minute 17 of every hour (and by hand: **Actions** → **Sync CLI release**). It lists the

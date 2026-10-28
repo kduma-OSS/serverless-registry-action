@@ -42,8 +42,9 @@ default is named in each release ("Default sreg release").
   `scripts/prepare-release.py`, commits `chore(release): v<version>`, pushes the annotated
   tag `v<version>`, creates the GitHub release and moves the major tag (`v1`).
 - The action follows stable `sreg` releases: the CLI's release dispatches the Release
-  workflow with the new `sreg-version` through a GitHub App (`RELEASE_APP_ID` /
-  `RELEASE_APP_PRIVATE_KEY` in the CLI repository), and the hourly **Sync CLI release**
+  workflow with the new `sreg-version` through a GitHub App (repository secrets
+  `SERVERLESS_REGISTRY_RELEASE_APP_ID` and `SERVERLESS_REGISTRY_RELEASE_APP_PRIVATE_KEY`
+  in the CLI repository), and the hourly **Sync CLI release**
   workflow (`.github/workflows/sync-cli-release.yml`) does the same with no token when the
   dispatch is not configured or fails.
 
