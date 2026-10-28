@@ -24,6 +24,10 @@ case "$(uname -s)" in
   MINGW* | MSYS* | CYGWIN*) windows=true exe=sreg.exe ;;
   *) windows=false exe=sreg ;;
 esac
+# A path as auth.sh hands it to sreg and writes it to the outputs: a Windows path under Git Bash.
+native() {
+  if $windows; then cygpath -w "$1"; else printf '%s\n' "$1"; fi
+}
 work="$(mktemp -d)"
 server_pid=""
 cleanup() {
@@ -205,11 +209,11 @@ mkdir -p "$work/home"
 
 if run_script auth.sh INPUT_ECOSYSTEM=composer REGISTRY_URL=https://packages.example.com \
   REGISTRY_TOKEN=acme:secret COMPOSER_HOME="$work/composer"; then
-  if [ "$(cat "$work/sreg.log.all")" != "auth composer --write $work/composer/auth.json" ]; then
+  if [ "$(cat "$work/sreg.log.all")" != "auth composer --write $(native "$work/composer/auth.json")" ]; then
     fail "auth.sh ran: $(cat "$work/sreg.log.all")"
   elif ! grep -qx 'composer token=acme:secret' "$work/composer/auth.json"; then
     fail "auth.sh did not write auth.json in COMPOSER_HOME"
-  elif ! grep -qx "file=$work/composer/auth.json" "$work/github_output"; then
+  elif ! grep -qxF "file=$(native "$work/composer/auth.json")" "$work/github_output"; then
     fail "auth.sh wrote the outputs: $(cat "$work/github_output")"
   else
     pass "auth.sh writes composer's auth.json in COMPOSER_HOME"
@@ -243,7 +247,7 @@ for _ in 1 2; do
     fail "auth.sh failed for cargo"
   }
 done
-if [ "$(cat "$work/sreg.log.all")" = "auth cargo --write $work/cargo/credentials.toml --registry-name internal" ] &&
+if [ "$(cat "$work/sreg.log.all")" = "auth cargo --write $(native "$work/cargo/credentials.toml") --registry-name internal" ] &&
   [ "$(grep -c -x '\[registries.internal\]' "$work/cargo/config.toml")" = 1 ] &&
   grep -qx 'index = "sparse+https://packages.example.com/cargo/index/"' "$work/cargo/config.toml"; then
   pass "auth.sh writes cargo's credentials and declares the registry once"
@@ -254,7 +258,7 @@ fi
 
 if run_script auth.sh INPUT_ECOSYSTEM=maven REGISTRY_URL=https://packages.example.com \
   ACTIONS_ID_TOKEN_REQUEST_URL=https://token.example.com INPUT_OIDC_PROJECT=acme-sdk &&
-  [ "$(cat "$work/sreg.log.all")" = "auth maven --write $work/home/.m2/settings.xml --oidc --project acme-sdk" ]; then
+  [ "$(cat "$work/sreg.log.all")" = "auth maven --write $(native "$work/home/.m2/settings.xml") --oidc --project acme-sdk" ]; then
   pass "auth.sh uses OIDC with --project and writes ~/.m2/settings.xml"
 else
   cat "$work/script.log" "$work/sreg.log.all" >&2
