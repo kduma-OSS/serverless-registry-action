@@ -9,7 +9,7 @@ default is named in each release ("Default sreg release").
 
 ## [Unreleased]
 
-## [1.0.0]
+## [1.0.0] - 2026-10-28
 
 ### Added
 
@@ -48,4 +48,5 @@ default is named in each release ("Default sreg release").
   workflow (`.github/workflows/sync-cli-release.yml`) does the same with no token when the
   dispatch is not configured or fails.
 
-[Unreleased]: https://github.com/kduma-OSS/serverless-registry-publish-action/commits/main
+[Unreleased]: https://github.com/kduma-OSS/serverless-registry-publish-action/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/kduma-OSS/serverless-registry-publish-action/releases/tag/v1.0.0
