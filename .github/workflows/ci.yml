@@ -31,6 +31,8 @@ jobs:
           PY
       - name: Shellcheck
         run: git ls-files -z '*.sh' test/fake-sreg | xargs -0 shellcheck
+      - name: Test the release script
+        run: python3 -m unittest discover -s scripts -v
 
   smoke:
     name: Smoke test (${{ matrix.os }})
