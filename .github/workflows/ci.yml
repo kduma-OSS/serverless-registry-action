@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse action.yml
+        run: |
+          python3 - <<'PY'
+          import yaml
+
+          with open("action.yml", encoding="utf-8") as f:
+              action = yaml.safe_load(f)
+          assert action["runs"]["using"] == "composite", "not a composite action"
+          default = action["inputs"]["sreg-version"].get("default", "")
+          assert default.startswith("v"), f"sreg-version has no default release: {default!r}"
+          print(f"action.yml parsed; default sreg release {default}")
+          PY
+      - name: Shellcheck
+        run: git ls-files -z '*.sh' test/fake-sreg | xargs -0 shellcheck
+
+  smoke:
+    name: Smoke test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test install.sh and publish.sh
+        run: test/smoke.sh
+
+  action:
+    name: Run the action
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Serve a fake sreg release
+        run: |
+          test/make-fake-release.sh "$RUNNER_TEMP/releases" v9.9.9
+          nohup python3 -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP/releases" \
+            > "$RUNNER_TEMP/server.log" 2>&1 &
+          for _ in $(seq 50); do
+            curl --silent --fail --output /dev/null \
+              http://127.0.0.1:8765/v9.9.9/sreg-cli-x86_64-unknown-linux-musl.tar.xz.sha256 && exit 0
+            sleep 0.2
+          done
+          cat "$RUNNER_TEMP/server.log"
+          exit 1
+      - id: publish
+        uses: ./
+        env:
+          SREG_RELEASES_URL: http://127.0.0.1:8765
+          FAKE_SREG_LOG: ${{ runner.temp }}/sreg.log
+        with:
+          ecosystem: composer
+          registry: https://packages.example.com
+          token: ci-acme-sdk:not-a-secret
+          dry-run: true
+          sreg-version: v9.9.9
+      - name: Check the outputs
+        env:
+          NAME: ${{ steps.publish.outputs.name }}
+          VERSION: ${{ steps.publish.outputs.version }}
+          URL: ${{ steps.publish.outputs.url }}
+          SKIPPED: ${{ steps.publish.outputs.skipped }}
+        run: |
+          cat "$RUNNER_TEMP/sreg.log"
+          test "$(paste -sd' ' "$RUNNER_TEMP/sreg.log")" = "composer publish --json --dry-run --skip-existing"
+          test "$NAME" = acme/sdk
+          test "$VERSION" = 1.2.0
+          test -z "$URL"
+          test "$SKIPPED" = false
