@@ -1,0 +1,58 @@
+# Hourly fallback for the push from the CLI: when the newest stable sreg release (not a
+# draft, not a prerelease) is newer than the `sreg-version` default in action.yml, release
+# the action with it as the new default (a patch release, through release.yml). Otherwise
+# the run ends quietly. Reading the public CLI releases needs only the default GITHUB_TOKEN.
+# See docs/releasing.md.
+name: Sync CLI release
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Not `release`: the called release job takes that group itself, and a caller holding the
+# same group would wait for itself.
+concurrency:
+  group: sync-cli-release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Find a newer sreg release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sreg-version: ${{ steps.find.outputs.sreg-version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Compare the newest stable sreg release with the default
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list -R kduma-OSS/serverless-registry-cli --limit 50 \
+            --json tagName,isDraft,isPrerelease \
+            --jq '.[] | select((.isDraft | not) and (.isPrerelease | not)) | .tagName' \
+            > "$RUNNER_TEMP/tags.txt"
+          newer=$(python3 scripts/prepare-release.py --newer-sreg-release < "$RUNNER_TEMP/tags.txt")
+          if [ -n "$newer" ]; then
+            echo "::notice::sreg $newer is newer than the default; releasing the action."
+          fi
+          echo "sreg-version=$newer" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Release
+    needs: check
+    if: needs.check.outputs.sreg-version != ''
+    uses: ./.github/workflows/release.yml
+    with:
+      sreg-version: ${{ needs.check.outputs.sreg-version }}
+      bump: patch
+      only-if-newer-sreg: true
+    secrets: inherit
