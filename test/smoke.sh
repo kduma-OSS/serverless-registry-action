@@ -11,10 +11,19 @@
 # - runs auth.sh for composer, npm (with a scope), cargo (with the registry declaration)
 #   and OIDC, and get.sh with and without `sole`, and checks the files and outputs.
 #
-# Needs bash, curl, python3, tar with xz, jq. Usage: test/smoke.sh
+# - runs install.sh as on a Windows runner (RUNNER_OS=Windows), which unpacks the zip.
+#
+# Needs bash, curl, python3, tar with xz, unzip, jq. Runs on Linux, macOS and Windows (Git
+# Bash). Usage: test/smoke.sh
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
+python="$(command -v python3 || command -v python)"
+# Under Git Bash install.sh writes Windows paths to GITHUB_PATH and the binary is sreg.exe.
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*) windows=true exe=sreg.exe ;;
+  *) windows=false exe=sreg ;;
+esac
 work="$(mktemp -d)"
 server_pid=""
 cleanup() {
@@ -38,7 +47,7 @@ for sum in "$work"/releases/v9.9.8/*.sha256; do
   echo "$(printf '0%.0s' $(seq 64)) *$(basename "${sum%.sha256}")" > "$sum"
 done
 
-python3 -u -m http.server 0 --bind 127.0.0.1 --directory "$work/releases" \
+"$python" -u -m http.server 0 --bind 127.0.0.1 --directory "$work/releases" \
   > "$work/server.log" 2>&1 &
 server_pid=$!
 port=""
@@ -66,8 +75,9 @@ install() {
 
 # --- install.sh ------------------------------------------------------------------------
 if install 9.9.9; then
-  bin_dir="$(head -n 1 "$work/github_path")"
-  if [ -x "$bin_dir/sreg" ] && [ "$("$bin_dir/sreg" --version)" = "sreg 9.9.9 (fake)" ] &&
+  bin_dir="$(head -n 1 "$work/github_path" | tr -d '\r')"
+  if $windows; then bin_dir="$(cygpath -u "$bin_dir")"; fi
+  if [ -x "$bin_dir/$exe" ] && [ "$("$bin_dir/$exe" --version)" = "sreg 9.9.9 (fake)" ] &&
     grep -q '^Checksum verified: ' "$work/install.log"; then
     pass "install.sh installs the release and adds it to GITHUB_PATH"
   else
@@ -87,11 +97,25 @@ if env RUNNER_TEMP="$work/runner" GITHUB_PATH="$work/github_path" \
   bash "$root/install.sh" > "$work/install.log" 2>&1 &&
   grep -q 'already installed' "$work/install.log" &&
   grep -qx 'version=v9.9.9' "$work/github_output" &&
-  grep -q '^path=.*/sreg$' "$work/github_output"; then
+  grep -Eq '^path=.*[/\\]sreg(\.exe)?$' "$work/github_output"; then
   pass "install.sh reuses an installed release and writes the outputs"
 else
   cat "$work/install.log" "$work/github_output" >&2
   fail "install.sh did not reuse the installed release"
+fi
+
+# The Windows build: a zip with sreg.exe; the runner variables select it on any host.
+rm -rf "$work/runner"
+mkdir -p "$work/runner"
+if env RUNNER_OS=Windows RUNNER_ARCH=X64 RUNNER_TEMP="$work/runner" \
+  SREG_RELEASES_URL="$releases_url" SREG_VERSION=9.9.9 \
+  bash "$root/install.sh" > "$work/install.log" 2>&1 &&
+  grep -q 'x86_64-pc-windows-msvc' "$work/install.log" &&
+  [ -n "$(find "$work/runner/sreg" -type f -name sreg.exe)" ]; then
+  pass "install.sh unpacks the Windows zip"
+else
+  cat "$work/install.log" >&2
+  fail "install.sh did not install the Windows build"
 fi
 
 if install v9.9.8; then
