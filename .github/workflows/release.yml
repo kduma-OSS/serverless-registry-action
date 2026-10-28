@@ -1,0 +1,187 @@
+# Releases the action: optionally sets the default sreg release (the `default:` of the
+# `sreg-version` input in action.yml), computes the next version from the latest `vX.Y.Z`
+# tag, rolls CHANGELOG.md, commits `chore(release): v<version>`, pushes the annotated tag
+# `v<version>`, creates the GitHub release and moves the major tag (`v1`) to it.
+#
+# Started by hand (workflow_dispatch), by sync-cli-release.yml (workflow_call) and by the
+# CLI's release (a workflow_dispatch through its GitHub App). See docs/releasing.md.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      sreg-version:
+        description: New default sreg release, e.g. v0.2.0 (empty keeps the current default)
+        type: string
+        default: ""
+      bump:
+        description: How to change the version (ignored when version is set)
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: Explicit version to release, e.g. 1.2.0 (overrides bump)
+        type: string
+        default: ""
+      only-if-newer-sreg:
+        description: End quietly unless sreg-version is newer than the current default
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      sreg-version:
+        type: string
+        default: ""
+      bump:
+        type: string
+        default: patch
+      version:
+        type: string
+        default: ""
+      only-if-newer-sreg:
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    # Every release (by hand, from the sync or from the CLI) waits for the previous one.
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    steps:
+      - name: Refuse branches other than main
+        if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::Releases are cut from main only; this run was started from $REF."
+          exit 1
+
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Check the inputs
+        id: check
+        env:
+          SREG_VERSION: ${{ inputs.sreg-version }}
+          BUMP: ${{ inputs.bump }}
+          ONLY_IF_NEWER: ${{ inputs.only-if-newer-sreg }}
+        run: |
+          case "$BUMP" in
+            patch | minor | major) ;;
+            *)
+              echo "::error::bump must be patch, minor or major, not '$BUMP'."
+              exit 1
+              ;;
+          esac
+          proceed=true
+          if [ "$ONLY_IF_NEWER" = true ]; then
+            if [ -z "$SREG_VERSION" ]; then
+              echo "::error::only-if-newer-sreg needs sreg-version."
+              exit 1
+            fi
+            newer=$(echo "$SREG_VERSION" | python3 scripts/prepare-release.py --newer-sreg-release)
+            if [ -z "$newer" ]; then
+              echo "::notice::The default sreg release is already $SREG_VERSION or newer; nothing to release."
+              proceed=false
+            fi
+          fi
+          echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare the release
+        id: prepare
+        if: steps.check.outputs.proceed == 'true'
+        env:
+          SREG_VERSION: ${{ inputs.sreg-version }}
+          BUMP: ${{ inputs.bump }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          args=(--bump "$BUMP" --notes-file "$RUNNER_TEMP/notes.md")
+          if [ -n "$VERSION" ]; then args+=(--version "$VERSION"); fi
+          if [ -n "$SREG_VERSION" ]; then args+=(--sreg-version "$SREG_VERSION"); fi
+          version=$(python3 scripts/prepare-release.py "${args[@]}")
+          tag="v$version"
+          if git rev-parse --verify --quiet "refs/tags/$tag" > /dev/null; then
+            echo "::error::The tag $tag already exists."
+            exit 1
+          fi
+          case "$version" in
+            *-*) prerelease=true ;;
+            *) prerelease=false ;;
+          esac
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "major=v${version%%.*}"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          git diff
+
+      - name: Check the action
+        if: steps.check.outputs.proceed == 'true'
+        run: |
+          python3 -c 'import sys, yaml; yaml.safe_load(open(sys.argv[1]))' action.yml
+          test/smoke.sh
+
+      - name: Commit, tag and push
+        if: steps.check.outputs.proceed == 'true'
+        env:
+          TAG: ${{ steps.prepare.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add action.yml CHANGELOG.md
+          git commit --message "chore(release): $TAG"
+          { echo "$TAG"; echo; cat "$RUNNER_TEMP/notes.md"; } > "$RUNNER_TEMP/tag-message.md"
+          # verbatim: keep the "### Added" lines of the changelog in the tag message.
+          git tag --annotate --cleanup=verbatim --file "$RUNNER_TEMP/tag-message.md" "$TAG"
+          git push --atomic origin HEAD:refs/heads/main "refs/tags/$TAG"
+
+      - name: Create the GitHub release
+        if: steps.check.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.prepare.outputs.tag }}
+          PRERELEASE: ${{ steps.prepare.outputs.prerelease }}
+        run: |
+          args=(--title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag)
+          if [ "$PRERELEASE" = true ]; then args+=(--prerelease); fi
+          gh release create "$TAG" "${args[@]}"
+
+      - name: Move the major tag
+        if: steps.check.outputs.proceed == 'true' && steps.prepare.outputs.prerelease == 'false'
+        env:
+          TAG: ${{ steps.prepare.outputs.tag }}
+          MAJOR: ${{ steps.prepare.outputs.major }}
+        run: |
+          git tag -f "$MAJOR" "$TAG^{commit}"
+          git push -f origin "refs/tags/$MAJOR"
+
+      - name: Summary
+        if: always() && steps.prepare.outputs.version != ''
+        env:
+          TAG: ${{ steps.prepare.outputs.tag }}
+          MAJOR: ${{ steps.prepare.outputs.major }}
+          PRERELEASE: ${{ steps.prepare.outputs.prerelease }}
+        run: |
+          repo="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          {
+            echo "## $TAG"
+            echo
+            echo "- Release: $repo/releases/tag/$TAG"
+            if [ "$PRERELEASE" = true ]; then
+              echo "- Prerelease: \`$MAJOR\` was not moved."
+            else
+              echo "- \`$MAJOR\` now points to \`$TAG\`."
+            fi
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+          } >> "$GITHUB_STEP_SUMMARY"
