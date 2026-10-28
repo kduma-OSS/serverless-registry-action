@@ -9,6 +9,12 @@ default is named in each release ("Default sreg release").
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-10-28
+
+### Changed
+
+- Default sreg release: v0.1.5.
+
 ### Fixed
 
 - The release workflow pushes the release commit and tags as the release GitHub App
@@ -112,7 +118,8 @@ default is named in each release ("Default sreg release").
   workflow (`.github/workflows/sync-cli-release.yml`) does the same with no token when the
   dispatch is not configured or fails.
 
-[Unreleased]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.1...v1.0.2
