@@ -9,6 +9,12 @@ default is named in each release ("Default sreg release").
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-10-29
+
+### Changed
+
+- Default sreg release: v0.2.3.
+
 ## [1.0.8] - 2026-10-28
 
 ### Changed
@@ -140,7 +146,8 @@ default is named in each release ("Default sreg release").
   workflow (`.github/workflows/sync-cli-release.yml`) does the same with no token when the
   dispatch is not configured or fails.
 
-[Unreleased]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.8...HEAD
+[Unreleased]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.9...HEAD
+[1.0.9]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/kduma-OSS/serverless-registry-action/compare/v1.0.5...v1.0.6
